@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { SessionProvider, useSession } from 'next-auth/react';
 import { AuthProvider } from './context/AuthContext';
 import LoginPage from './pages/LoginPage';
@@ -26,7 +26,7 @@ const Router: React.FC = () => {
   const { data: session, status } = useSession();
 
   if (status === 'loading') {
-    return <div>Loading session...</div>;
+    return <div className="min-h-screen flex items-center justify-center"><div>Loading session...</div></div>;
   }
 
   if (!session) {
@@ -76,8 +76,18 @@ const AppContent: React.FC = () => {
 }
 
 const App: React.FC = () => {
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  if (!isClient) {
+    return null;
+  }
+
   return (
-    <SessionProvider basePath="/api/auth">
+    <SessionProvider>
       <AuthProvider>
         <AppContent />
       </AuthProvider>

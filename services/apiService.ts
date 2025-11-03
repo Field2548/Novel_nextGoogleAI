@@ -14,12 +14,14 @@ async function fetchAPI<T>(url: string, options: RequestInit = {}): Promise<T> {
         const errorData = await response.json();
         throw new Error(errorData.error || `API call failed with status ${response.status}`);
     }
-    return response.json();
+    // Handle cases where the response body might be empty (e.g., 204 No Content)
+    const text = await response.text();
+    return text ? JSON.parse(text) : null;
 }
 
 
 export const apiService = {
-  // Auth is handled by NextAuth, but we need a signup function
+  // === AUTH ===
   signup: async (username: string, email: string, pass: string): Promise<User | null> => {
     return fetchAPI('/api/auth/signup', {
         method: 'POST',
@@ -27,13 +29,11 @@ export const apiService = {
     });
   },
 
-  // Reader APIs
-  getRecommendedNovels: (): Promise<Novel[]> => {
-    return fetchAPI('/api/novels?category=Recommended'); // Example category
-  },
-
-  getFantasyNovels: (): Promise<Novel[]> => {
-    return fetchAPI('/api/novels?category=Fantasy'); // Example category
+  // === NOVELS / READER FLOWS ===
+  // FIX: Added authorId to filters to allow fetching novels by a specific author.
+  getNovels: (filters: { genre?: string, tag?: string, status?: string, orderBy?: 'views' | 'rating', authorId?: number } = {}): Promise<Novel[]> => {
+    const params = new URLSearchParams(filters as any);
+    return fetchAPI(`/api/novels?${params.toString()}`);
   },
   
   getNovelById: (id: number): Promise<Novel | undefined> => {
@@ -44,30 +44,104 @@ export const apiService = {
     return fetchAPI(`/api/novels/${novelId}/episodes`);
   },
   
-  getEpisode: (novelId: number, episodeId: number): Promise<Episode | undefined> => {
-    // Assuming an endpoint structure like this might be needed.
-    // Let's reuse the general episodes fetch for now.
-    // In a real app, you might have /api/episodes/[episodeId]
-    return apiService.getEpisodesByNovelId(novelId).then(eps => eps.find(e => e.episode_id === episodeId));
+  // FIX: Renamed getEpisodeContent to getEpisode for consistency.
+  getEpisode: (episodeId: number): Promise<Episode | undefined> => {
+    return fetchAPI(`/api/episodes/${episodeId}`);
   },
   
   getReviewsByNovelId: (novelId: number): Promise<Review[]> => {
       return fetchAPI(`/api/novels/${novelId}/reviews`);
   },
+
+  postReview: (novelId: number, rating: number, comment: string): Promise<Review> => {
+    return fetchAPI(`/api/novels/${novelId}/reviews`, {
+      method: 'POST',
+      body: JSON.stringify({ rating, comment })
+    });
+  },
   
   getCommentsByEpisodeId: (episodeId: number): Promise<Comment[]> => {
-      // Placeholder for comments API
-      return Promise.resolve([]);
-      // return fetchAPI(`/api/episodes/${episodeId}/comments`);
+      return fetchAPI(`/api/episodes/${episodeId}/comments`);
   },
 
-  // Writer APIs
-  getWriterNovels: (writerId: number): Promise<Novel[]> => {
-    // This would need a dedicated endpoint, e.g., /api/writer/novels
-    // For now, let's filter on the client, assuming we have all novels. This is not efficient.
-    console.warn("apiService.getWriterNovels is not efficiently implemented yet.");
-    return fetchAPI<Novel[]>('/api/novels').then(novels => 
-        novels.filter(n => n.author.user_id === writerId)
-    );
+  postComment: (episodeId: number, content: string, parentCommentId?: number): Promise<Comment> => {
+      return fetchAPI(`/api/episodes/${episodeId}/comments`, {
+          method: 'POST',
+          body: JSON.stringify({ content, parentCommentId })
+      });
+  },
+
+  // === USER INTERACTIONS ===
+  toggleWishlist: (novelId: number): Promise<{ wishlisted: boolean }> => {
+    return fetchAPI(`/api/novels/${novelId}/wishlist`, { method: 'POST' });
+  },
+
+  toggleFollow: (authorId: number): Promise<{ following: boolean }> => {
+    return fetchAPI(`/api/users/${authorId}/follow`, { method: 'POST' });
+  },
+
+  toggleLike: (novelId: number): Promise<{ liked: boolean, likesCount: number }> => {
+    return fetchAPI(`/api/novels/${novelId}/like`, { method: 'POST' });
+  },
+
+  updateReadingProgress: (novelId: number, episodeId: number): Promise<void> => {
+    return fetchAPI(`/api/users/me/reading-progress`, {
+      method: 'POST',
+      body: JSON.stringify({ novelId, episodeId })
+    });
+  },
+
+  updateUserProfile: (profileData: { bio?: string, profile_picture?: string }): Promise<User> => {
+      return fetchAPI('/api/users/me/profile', {
+          method: 'PUT',
+          body: JSON.stringify(profileData)
+      });
+  },
+
+  // === WRITER FLOWS ===
+  createNovel: (novelData: { title: string, description: string, tags: string[], cover_image?: string }): Promise<Novel> => {
+      return fetchAPI('/api/novels', {
+          method: 'POST',
+          body: JSON.stringify(novelData)
+      });
+  },
+
+  createEpisode: (novelId: number, episodeData: { title: string, content: string, is_locked: boolean, price?: number }): Promise<Episode> => {
+      return fetchAPI(`/api/novels/${novelId}/episodes`, {
+          method: 'POST',
+          body: JSON.stringify(episodeData)
+      });
+  },
+  
+  updateEpisode: (episodeId: number, episodeData: { title?: string, content?: string, is_locked?: boolean, price?: number }): Promise<Episode> => {
+      return fetchAPI(`/api/episodes/${episodeId}`, {
+          method: 'PUT',
+          body: JSON.stringify(episodeData)
+      });
+  },
+
+  getWriterDashboard: (): Promise<any> => {
+      return fetchAPI('/api/writer/dashboard');
+  },
+  
+  // === ADMIN FLOWS ===
+  getAdminDashboard: (): Promise<any> => {
+      return fetchAPI('/api/admin/dashboard');
+  },
+
+  updateUserStatus: (userId: number, updates: { role?: string, status?: string }): Promise<User> => {
+      return fetchAPI(`/api/admin/users/${userId}`, {
+          method: 'PUT',
+          body: JSON.stringify(updates)
+      });
+  },
+
+  deleteComment: (commentId: number): Promise<void> => {
+      return fetchAPI(`/api/admin/comments/${commentId}`, { method: 'DELETE' });
+  },
+
+  // === DEV FLOWS ===
+  getDevMetrics: (): Promise<any> => {
+    return fetchAPI('/api/dev/metrics');
   }
 };

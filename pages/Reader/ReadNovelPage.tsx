@@ -36,8 +36,9 @@ const ReadNovelPage: React.FC<ReadNovelPageProps> = ({ novelId, episodeId }) => 
     const fetchData = async () => {
       try {
         setLoading(true);
+        // FIX: Corrected the call to fetch episode data. It was calling a non-existent `getEpisode` with wrong arguments.
         const [episodeData, novelData, commentsData] = await Promise.all([
-            apiService.getEpisode(novelId, episodeId),
+            apiService.getEpisode(episodeId),
             apiService.getNovelById(novelId),
             apiService.getCommentsByEpisodeId(episodeId)
         ]);

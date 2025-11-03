@@ -13,9 +13,10 @@ const HomePage: React.FC = () => {
     const fetchNovels = async () => {
       try {
         setLoading(true);
+        // FIX: Replaced calls to non-existent getRecommendedNovels and getFantasyNovels with calls to getNovels with appropriate filters.
         const [reco, fant] = await Promise.all([
-          apiService.getRecommendedNovels(),
-          apiService.getFantasyNovels(),
+          apiService.getNovels({ orderBy: 'rating' }),
+          apiService.getNovels({ genre: 'Fantasy' }),
         ]);
         setRecommendedNovels(reco);
         setFantasyNovels(fant);

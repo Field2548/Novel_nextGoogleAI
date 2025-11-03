@@ -13,7 +13,8 @@ const WriterDashboard: React.FC = () => {
 
   useEffect(() => {
     if (user) {
-      apiService.getWriterNovels(user.user_id)
+      // FIX: Replaced call to non-existent getWriterNovels with a call to getNovels with an authorId filter.
+      apiService.getNovels({ authorId: user.user_id })
         .then(setNovels)
         .finally(() => setLoading(false));
     }
