@@ -1,65 +1,35 @@
-
 import React, { createContext, useState, useEffect, useCallback } from 'react';
-import { User, UserRole } from '../types';
+import { User } from '../types';
 import { apiService } from '../services/apiService';
+// Import NextAuth hooks
+import { signIn, signOut, useSession } from 'next-auth/react';
+
 
 interface AuthContextType {
   user: User | null;
-  login: (email: string, pass: string) => Promise<User | null>;
-  signup: (username: string, email: string, pass: string) => Promise<User | null>;
-  logout: () => void;
-  setUser: React.Dispatch<React.SetStateAction<User | null>>;
+  // login: (email: string, pass: string) => Promise<User | null>; // Handled by NextAuth
+  // signup: (username: string, email: string, pass: string) => Promise<User | null>; // Handled by NextAuth
+  // logout: () => void; // Handled by NextAuth
+  // setUser: React.Dispatch<React.SetStateAction<User | null>>;
 }
 
+// NOTE: This context is now simplified. Most of its original functionality
+// (login, logout, user state) is now managed by NextAuth's `SessionProvider` and `useSession` hook.
+// You might not even need this custom context anymore, but we'll keep it for structure.
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
-
-  useEffect(() => {
-    // This could be extended to check for a token in localStorage
-    const loggedInUser = sessionStorage.getItem('user');
-    if (loggedInUser) {
-      setUser(JSON.parse(loggedInUser));
-    }
-  }, []);
-
-  const login = useCallback(async (email: string, pass: string) => {
-    try {
-      const loggedUser = await apiService.login(email, pass);
-      if (loggedUser) {
-        setUser(loggedUser);
-        sessionStorage.setItem('user', JSON.stringify(loggedUser));
-      }
-      return loggedUser;
-    } catch (error) {
-      console.error('Login failed:', error);
-      return null;
-    }
-  }, []);
+  const { data: session, status } = useSession();
   
-  const signup = useCallback(async (username: string, email: string, pass: string) => {
-    try {
-        const newUser = await apiService.signup(username, email, pass);
-        if(newUser) {
-            setUser(newUser);
-            sessionStorage.setItem('user', JSON.stringify(newUser));
-        }
-        return newUser;
-    } catch(error) {
-        console.error('Signup failed:', error);
-        return null;
-    }
-  }, []);
-
-  const logout = useCallback(() => {
-    setUser(null);
-    sessionStorage.removeItem('user');
-    window.location.hash = '';
-  }, []);
+  // You can map the session user to your app's User type
+  const user: User | null = session ? (session.user as User) : null;
+  
+  // The login, signup, and logout functions are now handled by NextAuth
+  // e.g., calling `signIn('credentials', { email, password })` or `signOut()` from your components.
+  // The original functions in this file are no longer needed.
 
   return (
-    <AuthContext.Provider value={{ user, login, signup, logout, setUser }}>
+    <AuthContext.Provider value={{ user }}>
       {children}
     </AuthContext.Provider>
   );

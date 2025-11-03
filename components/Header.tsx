@@ -1,11 +1,15 @@
-
 import React, { useState } from 'react';
-import { useAuth } from '../hooks/useAuth';
-import { SearchIcon, StarIcon, BellIcon, BookOpenIcon } from './icons';
+import { useSession, signOut } from 'next-auth/react';
+import { SearchIcon, StarIcon, BellIcon } from './icons';
 
 const Header: React.FC = () => {
-  const { user, logout } = useAuth();
+  const { data: session } = useSession();
+  const user = session?.user;
   const [dropdownOpen, setDropdownOpen] = useState(false);
+
+  const handleLogout = () => {
+    signOut({ callbackUrl: '/' }); // Redirect to home after sign out
+  };
 
   return (
     <header className="bg-white dark:bg-gray-800 shadow-md sticky top-0 z-50">
@@ -40,17 +44,17 @@ const Header: React.FC = () => {
             </button>
             <div className="relative">
               <button onClick={() => setDropdownOpen(!dropdownOpen)} className="flex text-sm border-2 border-transparent rounded-full focus:outline-none focus:border-gray-300 transition">
-                <img className="h-9 w-9 rounded-full object-cover" src={user?.profile_picture} alt={user?.username} />
+                <img className="h-9 w-9 rounded-full object-cover" src={(user as any)?.profile_picture || '/default-avatar.png'} alt={user?.name || 'User'} />
               </button>
               {dropdownOpen && (
                 <div className="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg py-1 bg-white dark:bg-gray-700 ring-1 ring-black ring-opacity-5 focus:outline-none">
                   <div className="px-4 py-2 text-sm text-gray-700 dark:text-gray-200 border-b dark:border-gray-600">
-                    <p className="font-semibold">{user?.username}</p>
+                    <p className="font-semibold">{user?.name}</p>
                     <p className="text-xs truncate">{user?.email}</p>
                   </div>
                   <a href="#" className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600">Your Profile</a>
                   <a href="#" className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600">Settings</a>
-                  <button onClick={logout} className="w-full text-left block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600">
+                  <button onClick={handleLogout} className="w-full text-left block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600">
                     Sign out
                   </button>
                 </div>

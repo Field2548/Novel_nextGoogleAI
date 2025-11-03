@@ -1,10 +1,12 @@
-
 import React, { useState } from 'react';
-import { useAuth } from '../hooks/useAuth';
+// import { useAuth } from '../hooks/useAuth'; - No longer needed for login action
+import { signIn } from 'next-auth/react';
+import { apiService } from '../services/apiService';
+
 
 const LoginPage: React.FC = () => {
   const [isLogin, setIsLogin] = useState(true);
-  const { login, signup } = useAuth();
+  // const { login, signup } = useAuth(); - Replaced with NextAuth
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   
@@ -18,10 +20,18 @@ const LoginPage: React.FC = () => {
     setError('');
     setLoading(true);
     try {
-      await login(email, password);
-      // The auth context will handle redirection
+      const result = await signIn('credentials', {
+        redirect: false, // Don't redirect, handle result manually
+        email,
+        password,
+      });
+
+      if (result?.error) {
+        setError('Failed to log in. Please check your credentials.');
+      }
+      // If successful, the useSession hook in App.tsx will detect the change and re-render.
     } catch (err) {
-      setError('Failed to log in. Please check your credentials.');
+      setError('An unexpected error occurred.');
     } finally {
         setLoading(false);
     }
@@ -36,9 +46,11 @@ const LoginPage: React.FC = () => {
     setError('');
     setLoading(true);
     try {
-        await signup(username, email, password);
-    } catch(err) {
-        setError('Failed to sign up. Please try again.');
+        await apiService.signup(username, email, password);
+        // After successful signup, log the user in
+        await handleLoginSubmit(e);
+    } catch(err: any) {
+        setError(err.message || 'Failed to sign up. Please try again.');
     } finally {
         setLoading(false);
     }

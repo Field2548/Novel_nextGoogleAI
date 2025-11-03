@@ -1,7 +1,6 @@
 import React from 'react';
-// FIX: `useAuth` is defined in `hooks/useAuth.ts`, not `context/AuthContext.tsx`.
+import { SessionProvider, useSession } from 'next-auth/react';
 import { AuthProvider } from './context/AuthContext';
-import { useAuth } from './hooks/useAuth';
 import LoginPage from './pages/LoginPage';
 import HomePage from './pages/Reader/HomePage';
 import WriterDashboard from './pages/Writer/WriterDashboard';
@@ -24,10 +23,17 @@ const Router: React.FC = () => {
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
 
-  const { user } = useAuth();
-  if (!user) {
+  const { data: session, status } = useSession();
+
+  if (status === 'loading') {
+    return <div>Loading session...</div>;
+  }
+
+  if (!session) {
     return <LoginPage />;
   }
+  
+  const user = session.user as any;
 
   // A more robust app would use a library like react-router-dom with HashRouter
   // but for this example, we'll use a simple hash parser.
@@ -58,10 +64,10 @@ const Router: React.FC = () => {
 };
 
 const AppContent: React.FC = () => {
-  const { user } = useAuth();
+  const { data: session } = useSession();
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200">
-      {user && <Header />}
+      {session && <Header />}
       <main>
         <Router />
       </main>
@@ -71,9 +77,11 @@ const AppContent: React.FC = () => {
 
 const App: React.FC = () => {
   return (
-    <AuthProvider>
-      <AppContent />
-    </AuthProvider>
+    <SessionProvider basePath="/api/auth">
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
+    </SessionProvider>
   );
 };
 
