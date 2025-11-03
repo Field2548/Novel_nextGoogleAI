@@ -1,266 +1,297 @@
-# Building a Backend for Novel Nest: A Step-by-Step Guide
+# Building a Full-Stack Backend for Novel Nest with Next.js
 
-This document provides a comprehensive guide to building a backend server for the Novel Nest application. We'll use a popular and powerful stack: **Node.js** with the **Express.js** framework and a **PostgreSQL** database.
+This guide outlines the modern approach to building a full-stack application using **Next.js** for both the frontend and backend. This creates a cohesive, type-safe, and highly performant architecture.
 
 ---
 
 ### Why this stack?
-*   **Node.js & Express.js**: This allows you to write your backend in JavaScript, keeping the language consistent with the React frontend. It's fast, widely used, and has a massive ecosystem of libraries (via npm).
-*   **PostgreSQL**: A powerful, open-source relational database that is excellent for handling structured data like users, novels, and chapters. It reliably enforces data integrity, which is crucial for an application like this.
+*   **Next.js**: A React framework that handles both client-side rendering (like your current app) and server-side logic via **API Routes**. This eliminates the need for a separate Express server, simplifying development and deployment.
+*   **TypeScript**: Provides end-to-end type safety, from your database schema to your React components, catching errors early and improving developer experience.
+*   **PostgreSQL**: A powerful, open-source relational database that is excellent for handling structured data.
+*   **Prisma**: A next-generation ORM (Object-Relational Mapper) that makes database access simple, intuitive, and, most importantly, fully type-safe. It auto-generates a TypeScript client based on your database schema.
+*   **NextAuth.js (Auth.js)**: The standard for authentication in Next.js. It simplifies adding login, logout, and session management with providers like email/password, Google, GitHub, etc.
 
 ---
 
-## Step 1: Prerequisites & Initial Setup
+## Step 1: Project Setup
 
-Before you start, you need to install a few tools:
+Instead of a separate backend folder, you'll have a single Next.js project.
 
-1.  **Node.js**: Download and install it from [nodejs.org](https://nodejs.org/). This will also install `npm`, the Node Package Manager.
-2.  **Code Editor**: VS Code is highly recommended.
-3.  **PostgreSQL**: Install a local PostgreSQL server. You can find installers and instructions at [postgresql.org](https://www.postgresql.org/download/).
-4.  **Database GUI (Optional but Recommended)**: A tool like [DBeaver](https://dbeaver.io/) or [Postico](https://eggerapps.at/postico/) makes it much easier to view and manage your database.
-
----
-
-## Step 2: Backend Project Initialization
-
-1.  Create a new folder for your backend, separate from your frontend code (e.g., `novel-nest-backend`).
-2.  Open a terminal in that new folder and run `npm init -y` to create a `package.json` file.
-3.  Install the necessary libraries:
-
+1.  **Create a new Next.js project:**
     ```bash
-    npm install express pg cors dotenv bcryptjs jsonwebtoken
+    npx create-next-app@latest novel-nest-fullstack --ts
     ```
-
-    Here's what each package does:
-    *   `express`: The web server framework.
-    *   `pg`: The official PostgreSQL client for Node.js.
-    *   `cors`: A middleware to allow your React frontend (on a different "origin") to make requests to this backend.
-    *   `dotenv`: Manages environment variables (like database credentials) so you don't have to hardcode them.
-    *   `bcryptjs`: A library to securely hash user passwords. **Never store plain-text passwords!**
-    *   `jsonwebtoken`: Implements JSON Web Tokens (JWT) for secure user authentication sessions.
+2.  **Migrate Existing Code:**
+    *   Copy your existing `components`, `hooks`, `types.ts`, etc., into the new project's root directory.
+    *   Your page components (like `HomePage.tsx`) will go into the `pages` directory. For example, `pages/Reader/HomePage.tsx` would become `pages/index.tsx` (for the root page) or `pages/dashboard.tsx`. Next.js uses a file-system based router.
+    *   The existing `App.tsx` logic for routing will be replaced by Next.js's built-in router.
 
 ---
 
-## Step 3: Database Design
+## Step 2: Database Setup with Prisma
 
-The interfaces in `frontend/types.ts` are a perfect blueprint for our database tables. Here are the SQL commands to create them. You can run these commands in your database GUI.
+Prisma will manage your database schema and provide a type-safe client to interact with it.
 
-```sql
--- For storing user accounts and roles
-CREATE TABLE users (
-    user_id SERIAL PRIMARY KEY,
-    username VARCHAR(50) UNIQUE NOT NULL,
-    email VARCHAR(255) UNIQUE NOT NULL,
-    password_hash VARCHAR(255) NOT NULL,
-    profile_picture VARCHAR(255),
-    bio TEXT,
-    role VARCHAR(20) NOT NULL DEFAULT 'Reader',
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
+1.  **Install Prisma:**
+    ```bash
+    npm install prisma --save-dev
+    npm install @prisma/client
+    ```
+2.  **Initialize Prisma:** In your project root, run:
+    ```bash
+    npx prisma init --datasource-provider postgresql
+    ```
+    This creates a `prisma` folder with a `schema.prisma` file and a `.env` file for your database credentials.
 
--- For storing novel information
-CREATE TABLE novels (
-    novel_id SERIAL PRIMARY KEY,
-    author_id INT NOT NULL REFERENCES users(user_id),
-    title VARCHAR(255) NOT NULL,
-    description TEXT,
-    cover_image VARCHAR(255),
-    tags TEXT[],
-    status VARCHAR(20) NOT NULL DEFAULT 'Ongoing',
-    last_update TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    views INT NOT NULL DEFAULT 0,
-    likes INT NOT NULL DEFAULT 0,
-    rating NUMERIC(3, 2) NOT NULL DEFAULT 0.00
-);
-
--- For storing individual chapters/episodes of a novel
-CREATE TABLE episodes (
-    episode_id SERIAL PRIMARY KEY,
-    novel_id INT NOT NULL REFERENCES novels(novel_id) ON DELETE CASCADE,
-    title VARCHAR(255) NOT NULL,
-    content TEXT,
-    is_locked BOOLEAN NOT NULL DEFAULT false,
-    price INT NOT NULL DEFAULT 0,
-    release_date TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- You can continue this pattern for reviews and comments
-```
-
----
-
-## Step 4: Server Setup and Database Connection
-
-1.  In your backend project root, create a `.env` file to store your database connection string. This keeps your credentials secret.
-
+3.  **Configure `.env`:** Add your PostgreSQL connection string to the `.env` file.
     ```
     # .env
     DATABASE_URL="postgresql://YOUR_USERNAME:YOUR_PASSWORD@localhost:5432/YOUR_DATABASE_NAME"
-    JWT_SECRET="YOUR_SUPER_SECRET_KEY_FOR_SIGNING_TOKENS"
     ```
 
-2.  Create a file named `db.js` to handle the database connection pool. A connection pool is much more efficient than creating a new connection for every query.
+4.  **Define Your Schema:** Open `prisma/schema.prisma` and define your models. This replaces the need for manual SQL `CREATE TABLE` commands. It's based directly on your `types.ts`.
 
-    ```javascript
-    // db.js
-    const { Pool } = require('pg');
-    require('dotenv').config();
+    ```prisma
+    // prisma/schema.prisma
 
-    const pool = new Pool({
-      connectionString: process.env.DATABASE_URL,
-    });
-
-    module.exports = {
-      query: (text, params) => pool.query(text, params),
-    };
-    ```
-
-3.  Create your main server file, `index.js`.
-
-    ```javascript
-    // index.js
-    const express = require('express');
-    const cors = require('cors');
-    require('dotenv').config();
-
-    const app = express();
-    const PORT = process.env.PORT || 4000;
-
-    // Middleware
-    app.use(cors()); // Allow requests from your frontend
-    app.use(express.json()); // Allow the server to understand JSON request bodies
-
-    // Routes (we will add these next)
-    app.get('/', (req, res) => {
-      res.send('Novel Nest API is running!');
-    });
-
-    // Start the server
-    app.listen(PORT, () => {
-      console.log(`Server is running on http://localhost:${PORT}`);
-    });
-    ```
-
----
-
-## Step 5: Building API Endpoints
-
-This is where you'll recreate the logic from `apiService.ts`. Your folder structure could look like this:
-
-```
-/routes
-  - auth.js
-  - novels.js
-/controllers
-  - authController.js
-  - novelController.js
-index.js
-db.js
-```
-
-Here's an example of how to build the authentication routes.
-
-#### Example: `routes/auth.js`
-```javascript
-// routes/auth.js
-const express = require('express');
-const router = express.Router();
-const authController = require('../controllers/authController');
-
-router.post('/signup', authController.signup);
-router.post('/login', authController.login);
-
-module.exports = router;
-```
-
-#### Example: `controllers/authController.js`
-```javascript
-// controllers/authController.js
-const db = require('../db');
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
-
-exports.signup = async (req, res) => {
-    const { username, email, password } = req.body;
-    try {
-        // Hash password
-        const salt = await bcrypt.genSalt(10);
-        const password_hash = await bcrypt.hash(password, salt);
-
-        const newUserQuery = 'INSERT INTO users (username, email, password_hash, role) VALUES ($1, $2, $3, $4) RETURNING user_id, username, email, role';
-        const { rows } = await db.query(newUserQuery, [username, email, password_hash, 'Reader']);
-        
-        // Don't send the password hash back
-        res.status(201).json(rows[0]);
-
-    } catch (err) {
-        console.error(err.message);
-        res.status(500).send('Server error');
+    generator client {
+      provider = "prisma-client-js"
     }
-};
 
-exports.login = async (req, res) => {
-    // ... Login logic here
-    // 1. Find user by email from the database
-    // 2. Use bcrypt.compare() to check if the provided password matches the stored hash
-    // 3. If it matches, create a JWT with jwt.sign()
-    // 4. Send the user object and the token back to the client
-};
-```
-You would then connect this router in your main `index.js` file:
-```javascript
-// index.js (additions)
-const authRoutes = require('./routes/auth');
-app.use('/api/auth', authRoutes);
-```
+    datasource db {
+      provider = "postgresql"
+      url      = env("DATABASE_URL")
+    }
 
-You would follow this pattern for all other data types (novels, episodes, etc.), creating routes and controllers to query the database and return the data as JSON.
+    model User {
+      user_id         Int      @id @default(autoincrement())
+      username        String   @unique
+      email           String   @unique
+      password_hash   String
+      profile_picture String?
+      bio             String?
+      role            UserRole @default(READER)
+      created_at      DateTime @default(now())
+      novels          Novel[]
+      reviews         Review[]
+      comments        Comment[]
+    }
+
+    model Novel {
+      novel_id    Int       @id @default(autoincrement())
+      author      User      @relation(fields: [author_id], references: [user_id])
+      author_id   Int
+      title       String
+      description String?
+      cover_image String?
+      tags        String[]
+      status      String    @default("Ongoing")
+      last_update DateTime  @updatedAt
+      views       Int       @default(0)
+      likes       Int       @default(0)
+      rating      Float     @default(0.0)
+      episodes    Episode[]
+      reviews     Review[]
+    }
+
+    model Episode {
+      episode_id   Int       @id @default(autoincrement())
+      novel        Novel     @relation(fields: [novel_id], references: [novel_id], onDelete: Cascade)
+      novel_id     Int
+      title        String
+      content      String?
+      is_locked    Boolean   @default(false)
+      price        Int       @default(0)
+      release_date DateTime  @default(now())
+      comments     Comment[]
+    }
+
+    model Review {
+      review_id  Int      @id @default(autoincrement())
+      novel      Novel    @relation(fields: [novel_id], references: [novel_id], onDelete: Cascade)
+      novel_id   Int
+      user       User     @relation(fields: [user_id], references: [user_id])
+      user_id    Int
+      rating     Int
+      comment    String
+      created_at DateTime @default(now())
+    }
+
+    model Comment {
+      comment_id        Int       @id @default(autoincrement())
+      episode           Episode   @relation(fields: [episode_id], references: [episode_id], onDelete: Cascade)
+      episode_id        Int
+      user              User      @relation(fields: [user_id], references: [user_id])
+      user_id           Int
+      parent            Comment?  @relation("Replies", fields: [parent_comment_id], references: [comment_id])
+      parent_comment_id Int?
+      content           String
+      created_at        DateTime  @default(now())
+      replies           Comment[] @relation("Replies")
+    }
+
+    enum UserRole {
+      READER
+      WRITER
+      ADMIN
+      DEVELOPER
+    }
+    ```
+
+5.  **Run the Migration:** This command reads your schema, creates the SQL migration files, and applies them to your database.
+    ```bash
+    npx prisma migrate dev --name init
+    ```
+    Your database tables are now created!
 
 ---
 
-## Step 6: Connecting the Frontend
+## Step 3: Create API Routes
 
-Finally, you need to update `frontend/services/apiService.ts` to make real network requests to your new backend instead of using mock data.
+API routes live in the `pages/api` directory. Each file becomes an endpoint. This is your new backend.
 
-1.  Define your API's base URL.
-2.  Use the `fetch` API to make HTTP requests.
+1.  **Create a Prisma Client Instance:** Create a file to instantiate Prisma Client so you can use it across your app.
+    ```typescript
+    // lib/prisma.ts
+    import { PrismaClient } from '@prisma/client';
+
+    const prisma = new PrismaClient();
+
+    export default prisma;
+    ```
+
+2.  **Create an API Endpoint:** Let's recreate `getRecommendedNovels`.
+    Create the file `pages/api/novels/recommended.ts`.
+
+    ```typescript
+    // pages/api/novels/recommended.ts
+    import type { NextApiRequest, NextApiResponse } from 'next';
+    import prisma from '../../../lib/prisma';
+    import { Novel } from '../../../types'; // You can reuse your types
+
+    export default async function handler(
+      req: NextApiRequest,
+      res: NextApiResponse<Novel[] | { error: string }>
+    ) {
+      if (req.method !== 'GET') {
+        return res.status(405).json({ error: 'Method not allowed' });
+      }
+
+      try {
+        const novels = await prisma.novel.findMany({
+          take: 6,
+          orderBy: {
+            likes: 'desc', // Or some other recommendation logic
+          },
+          include: {
+            author: {
+              select: { user_id: true, username: true },
+            },
+          },
+        });
+        res.status(200).json(novels as any); // Cast as any to match simple type
+      } catch (error) {
+        res.status(500).json({ error: 'Failed to fetch novels' });
+      }
+    }
+    ```
+    You now have a working endpoint at `http://localhost:3000/api/novels/recommended`.
+
+---
+
+## Step 4: Authentication with NextAuth.js
+
+1.  **Install:**
+    ```bash
+    npm install next-auth bcryptjs
+    npm install --save-dev @types/bcryptjs
+    ```
+2.  **Create the Auth Endpoint:** Create a catch-all file at `pages/api/auth/[...nextauth].ts`.
+    ```typescript
+    // pages/api/auth/[...nextauth].ts
+    import NextAuth from 'next-auth';
+    import CredentialsProvider from 'next-auth/providers/credentials';
+    import prisma from '../../../lib/prisma';
+    import bcrypt from 'bcryptjs';
+
+    export default NextAuth({
+      providers: [
+        CredentialsProvider({
+          name: 'Credentials',
+          credentials: {
+            email: { label: "Email", type: "text" },
+            password: {  label: "Password", type: "password" }
+          },
+          async authorize(credentials) {
+            if (!credentials) return null;
+
+            const user = await prisma.user.findUnique({
+              where: { email: credentials.email }
+            });
+
+            if (user && bcrypt.compareSync(credentials.password, user.password_hash)) {
+              // Return user object without password
+              return { id: user.user_id.toString(), name: user.username, email: user.email, role: user.role };
+            }
+            return null;
+          }
+        })
+      ],
+      // Add other configs like session strategy, callbacks, etc.
+      callbacks: {
+        // To add role to the session
+        async jwt({ token, user }) {
+          if (user) token.role = (user as any).role;
+          return token;
+        },
+        async session({ session, token }) {
+          if (session.user) (session.user as any).role = token.role;
+          return session;
+        },
+      }
+    });
+    ```
+3.  **Wrap Your App:** In `pages/_app.tsx`, wrap your application with the `SessionProvider`.
+    ```tsx
+    // pages/_app.tsx
+    import { SessionProvider } from 'next-auth/react';
+    import type { AppProps } from 'next/app';
+
+    function MyApp({ Component, pageProps: { session, ...pageProps } }: AppProps) {
+      return (
+        <SessionProvider session={session}>
+          <Component {...pageProps} />
+        </SessionProvider>
+      );
+    }
+    export default MyApp;
+    ```
+
+---
+
+## Step 5: Connecting the Frontend
+
+Your `apiService.ts` will now make requests to your own API routes. Because they are on the same domain, you don't need `cors` and can use relative paths.
 
 #### Example: `getRecommendedNovels`
 ```typescript
-// services/apiService.ts (Updated)
-import { User, Novel, /* ... */ } from '../types';
-
-const API_BASE_URL = 'http://localhost:4000/api'; // Your backend URL
+// services/apiService.ts (Updated for Next.js)
+import { Novel } from '../types';
 
 export const apiService = {
-  login: async (email: string, pass: string): Promise<User | null> => {
-      const response = await fetch(`${API_BASE_URL}/auth/login`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password: pass })
-      });
-      if (!response.ok) throw new Error('Login failed');
-      const data = await response.json(); // This would include the user and JWT
-      // You would then store the JWT in localStorage
-      return data.user;
-  },
-
-  // ... other functions
-  
   getRecommendedNovels: async (): Promise<Novel[]> => {
-    const response = await fetch(`${API_BASE_URL}/novels/recommended`);
-    if (!response.ok) throw new Error('Failed to fetch novels');
+    // Calls your own Next.js API route
+    const response = await fetch('/api/novels/recommended');
+    if (!response.ok) {
+      throw new Error('Failed to fetch recommended novels');
+    }
     return response.json();
   },
 
-  getNovelById: async (id: number): Promise<Novel | undefined> => {
-    const response = await fetch(`${API_BASE_URL}/novels/${id}`);
-    if (!response.ok) return undefined;
-    return response.json();
-  },
-
-  // Update all other functions in a similar way...
+  // Update all other functions to call their corresponding /api/... endpoints
 };
 ```
 
-This guide provides a solid foundation. From here, you can expand with more features, error handling, input validation, and eventually deploy your backend to a cloud service. Good luck!
+Your React components will now use `useSession` from `next-auth/react` instead of your custom `useAuth` hook, which simplifies getting user data and authentication state.
+
+This full-stack Next.js setup provides a robust, modern, and efficient foundation for building and scaling Novel Nest. Good luck!
